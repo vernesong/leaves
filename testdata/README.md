@@ -10,10 +10,10 @@
     xgboost xgboost.conf max_bin=255 tree_method=hist grow_policy=lossguide max_depth=0 max_leaves=255 data="../data/higgs.train" eval[test]="../data/higgs.test" objective="binary:logistic" eval_metric=auc model_out=xghiggs.model 2>&1 | tee xgboost_hist_higgs_accuracy.log
     xgboost xgboost.conf task=pred model_in=xghiggs.model pred_margin=true test_path="../data/higgs_1000examples_test.libsvm" name_pred="xghiggs_1000examples_true_raw_predictions.txt"
     xgboost xgboost.conf task=pred model_in=xghiggs.model test_path="../data/higgs_1000examples_test.libsvm" name_pred="xghiggs_1000examples_true_predictions.txt"
-    cp ../data/higgs_1000examples_test.libsvm $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
-    cp xghiggs_1000examples_true_predictions.txt $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
-    cp xghiggs_1000examples_true_raw_predictions.txt $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
-    cp xghiggs.model $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
+    cp ../data/higgs_1000examples_test.libsvm $GOPATH/src/github.com/vernesong/leaves/testdata/.
+    cp xghiggs_1000examples_true_predictions.txt $GOPATH/src/github.com/vernesong/leaves/testdata/.
+    cp xghiggs_1000examples_true_raw_predictions.txt $GOPATH/src/github.com/vernesong/leaves/testdata/.
+    cp xghiggs.model $GOPATH/src/github.com/vernesong/leaves/testdata/.
   ```
 
 ## Higgs dataset for LightGBM model
@@ -25,9 +25,9 @@
     head -n 1000 ../data/higgs.test > ../data/higgs_1000examples_test.libsvm
     lightgbm config=lightgbm.conf data=../data/higgs.train output_model=lghiggs.model objective=binary
     lightgbm task=predict data=../data/higgs_1000examples_test.libsvm input_model=lghiggs.model output_result=lghiggs_1000examples_true_predictions.txt predict_raw_score=true
-    cp ../data/higgs_1000examples_test.libsvm $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
-    cp lghiggs_1000examples_true_predictions.txt $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
-    cp lghiggs.model $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
+    cp ../data/higgs_1000examples_test.libsvm $GOPATH/src/github.com/vernesong/leaves/testdata/.
+    cp lghiggs_1000examples_true_predictions.txt $GOPATH/src/github.com/vernesong/leaves/testdata/.
+    cp lghiggs.model $GOPATH/src/github.com/vernesong/leaves/testdata/.
   ```
 
 ## MSLTR dateset for LightGBM model
@@ -39,9 +39,9 @@
     head -n 1000 ../data/msltr.test > ../data/msltr_1000examples_test.libsvm
     lightgbm config=lightgbm.conf data=../data/msltr.train output_model=lgmsltr.model objective=lambdarank
     lightgbm task=predict data=../data/msltr_1000examples_test.libsvm input_model=lgmsltr.model output_result=lgmsltr_1000examples_true_predictions.txt predict_raw_score=true
-    cp ../data/msltr_1000examples_test.libsvm $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
-    cp lgmsltr_1000examples_true_predictions.txt $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
-    cp lgmsltr.model $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
+    cp ../data/msltr_1000examples_test.libsvm $GOPATH/src/github.com/vernesong/leaves/testdata/.
+    cp lgmsltr_1000examples_true_predictions.txt $GOPATH/src/github.com/vernesong/leaves/testdata/.
+    cp lgmsltr.model $GOPATH/src/github.com/vernesong/leaves/testdata/.
   ```
 
 ## Agaricus dataset for XGBoost model
@@ -68,9 +68,9 @@
   ```
   4.
   ```sh
-    cp xgagaricus_true_predictions.txt $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
-    cp xgagaricus.model $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
-    cp ../data/agaricus.txt.test $GOPATH/src/github.com/dmitryikh/leaves/testdata/agaricus_test.libsvm
+    cp xgagaricus_true_predictions.txt $GOPATH/src/github.com/vernesong/leaves/testdata/.
+    cp xgagaricus.model $GOPATH/src/github.com/vernesong/leaves/testdata/.
+    cp ../data/agaricus.txt.test $GOPATH/src/github.com/vernesong/leaves/testdata/agaricus_test.libsvm
   ```
 
 ## Agaricus dataset for XGBoost gblinear model
@@ -98,10 +98,10 @@
   ```
   4.
   ```sh
-    cp xgblin_agaricus_true_predictions.txt $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
-    cp xgblin_agaricus_true_raw_predictions.txt $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
-    cp xgblin_agaricus.model $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
-    cp ../data/agaricus.txt.test $GOPATH/src/github.com/dmitryikh/leaves/testdata/agaricus_test.libsvm
+    cp xgblin_agaricus_true_predictions.txt $GOPATH/src/github.com/vernesong/leaves/testdata/.
+    cp xgblin_agaricus_true_raw_predictions.txt $GOPATH/src/github.com/vernesong/leaves/testdata/.
+    cp xgblin_agaricus.model $GOPATH/src/github.com/vernesong/leaves/testdata/.
+    cp ../data/agaricus.txt.test $GOPATH/src/github.com/vernesong/leaves/testdata/agaricus_test.libsvm
   ```
 
 ## Agaricus dataset for XGBoost DART model
@@ -134,9 +134,9 @@
   ```
   4.
   ```sh
-    cp xg_dart_agaricus_true_predictions.txt $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
-    cp xg_dart_agaricus.model $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
-    cp ../data/agaricus.txt.test $GOPATH/src/github.com/dmitryikh/leaves/testdata/agaricus_test.libsvm
+    cp xg_dart_agaricus_true_predictions.txt $GOPATH/src/github.com/vernesong/leaves/testdata/.
+    cp xg_dart_agaricus.model $GOPATH/src/github.com/vernesong/leaves/testdata/.
+    cp ../data/agaricus.txt.test $GOPATH/src/github.com/vernesong/leaves/testdata/agaricus_test.libsvm
   ```
 
 ## Multiclass classification dataset for LightGBM model
@@ -147,10 +147,10 @@
   lightgbm boosting_type=gbdt objective=multiclass num_class=5 max_bin=255 data=multiclass.train num_trees=10 learning_rate=0.05 num_leaves=31 output_model=lgmulticlass.model
   lightgbm input_model=lgmulticlass.model data=multiclass.test task=predict output_result=lgmulticlass_true_predictions.txt
   lightgbm input_model=lgmulticlass.model data=multiclass.test task=predict output_result=lgmulticlass_true_raw_predictions.txt predict_raw_score=true
-  cp multiclass.test $GOPATH/src/github.com/dmitryikh/leaves/testdata/multiclass_test.tsv
-  cp lgmulticlass.model $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
-  cp lgmulticlass_true_predictions.txt $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
-  cp lgmulticlass_true_raw_predictions.txt $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
+  cp multiclass.test $GOPATH/src/github.com/vernesong/leaves/testdata/multiclass_test.tsv
+  cp lgmulticlass.model $GOPATH/src/github.com/vernesong/leaves/testdata/.
+  cp lgmulticlass_true_predictions.txt $GOPATH/src/github.com/vernesong/leaves/testdata/.
+  cp lgmulticlass_true_raw_predictions.txt $GOPATH/src/github.com/vernesong/leaves/testdata/.
   ```
 
 
@@ -202,9 +202,9 @@ ds.dump_svmlight_file(test_X, test_Y, 'dermatology_test.libsvm')
   ```
   5.
   ```sh
-    cp xgdermatology_true_predictions.txt $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
-    cp xgdermatology.model $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
-    cp dermatology_test.libsvm $GOPATH/src/github.com/dmitryikh/leaves/testdata/.
+    cp xgdermatology_true_predictions.txt $GOPATH/src/github.com/vernesong/leaves/testdata/.
+    cp xgdermatology.model $GOPATH/src/github.com/vernesong/leaves/testdata/.
+    cp dermatology_test.libsvm $GOPATH/src/github.com/vernesong/leaves/testdata/.
   ```
 
 

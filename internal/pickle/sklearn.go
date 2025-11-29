@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/dmitryikh/leaves/util"
+	"github.com/vernesong/leaves/util"
 )
 
 // SklearnNode represents tree node data structure

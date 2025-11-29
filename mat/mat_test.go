@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/dmitryikh/leaves/util"
+	"github.com/vernesong/leaves/util"
 )
 
 func TestDenseMatFromLibsvm(t *testing.T) {
