@@ -1021,3 +1021,167 @@ func TestGenlinFMTPTweedie(t *testing.T) {
 		t.Errorf("different predictions: %s", err.Error())
 	}
 }
+
+// LightGBM v4.6.0
+
+// TestLGLinearTreeText tests linear_tree model in text format (LightGBM v4.6.0)
+func TestLGLinearTreeText(t *testing.T) {
+	testPath := filepath.Join("testdata", "breast_cancer_linear_tree_test.tsv")
+	modelPath := filepath.Join("testdata", "lg_linear_tree_breast_cancer.model")
+	truePath := filepath.Join("testdata", "lg_linear_tree_breast_cancer_true_predictions.txt")
+	skipTestIfFileNotExist(t, testPath, truePath, modelPath)
+
+	test, err := mat.DenseMatFromCsvFile(testPath, 0, false, "\t", 0.0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	model, err := LGEnsembleFromFile(modelPath, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if model.Name() != "lightgbm.gbdt" {
+		t.Errorf("expected model name lightgbm.gbdt, got %s", model.Name())
+	}
+	if model.NOutputGroups() != 1 {
+		t.Errorf("expected 1 output group, got %d", model.NOutputGroups())
+	}
+
+	truePredictions, err := mat.DenseMatFromCsvFile(truePath, 0, false, "\t", 0.0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	predictions := make([]float64, test.Rows*model.NOutputGroups())
+	err = model.PredictDense(test.Values, test.Rows, test.Cols, predictions, 0, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const tolerance = 1e-6
+	if err := util.AlmostEqualFloat64Slices(truePredictions.Values, predictions, tolerance); err != nil {
+		t.Errorf("linear tree text format: different predictions: %s", err.Error())
+	}
+}
+
+// TestLGLinearTreeJSON tests linear_tree model in JSON format v4 (LightGBM v4.6.0)
+func TestLGLinearTreeJSON(t *testing.T) {
+	testPath := filepath.Join("testdata", "breast_cancer_linear_tree_test.tsv")
+	modelPath := filepath.Join("testdata", "lg_linear_tree_breast_cancer.json")
+	truePath := filepath.Join("testdata", "lg_linear_tree_breast_cancer_true_predictions.txt")
+	skipTestIfFileNotExist(t, testPath, truePath, modelPath)
+
+	test, err := mat.DenseMatFromCsvFile(testPath, 0, false, "\t", 0.0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	modelFile, err := os.Open(modelPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer modelFile.Close()
+
+	model, err := LGEnsembleFromJSON(modelFile, false)
+	if err != nil {
+		t.Fatalf("failed to load linear tree JSON: %v", err)
+	}
+
+	if model.NOutputGroups() != 1 {
+		t.Errorf("expected 1 output group, got %d", model.NOutputGroups())
+	}
+
+	truePredictions, err := mat.DenseMatFromCsvFile(truePath, 0, false, "\t", 0.0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	predictions := make([]float64, test.Rows*model.NOutputGroups())
+	err = model.PredictDense(test.Values, test.Rows, test.Cols, predictions, 0, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const tolerance = 1e-6
+	if err := util.AlmostEqualFloat64Slices(truePredictions.Values, predictions, tolerance); err != nil {
+		t.Errorf("linear tree JSON format: different predictions: %s", err.Error())
+	}
+}
+
+// TestLGJsonV4GBDT tests JSON format v4 for standard gbdt (non-linear, LightGBM v4.6.0)
+func TestLGJsonV4GBDT(t *testing.T) {
+	testPath := filepath.Join("testdata", "breast_cancer_linear_tree_test.tsv")
+	modelPath := filepath.Join("testdata", "lg_v4_gbdt_breast_cancer.json")
+	truePath := filepath.Join("testdata", "lg_v4_gbdt_breast_cancer_true_predictions.txt")
+	skipTestIfFileNotExist(t, testPath, truePath, modelPath)
+
+	test, err := mat.DenseMatFromCsvFile(testPath, 0, false, "\t", 0.0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	modelFile, err := os.Open(modelPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer modelFile.Close()
+
+	model, err := LGEnsembleFromJSON(modelFile, false)
+	if err != nil {
+		t.Fatalf("failed to load v4 gbdt JSON: %v", err)
+	}
+
+	if model.NOutputGroups() != 1 {
+		t.Errorf("expected 1 output group, got %d", model.NOutputGroups())
+	}
+
+	truePredictions, err := mat.DenseMatFromCsvFile(truePath, 0, false, "\t", 0.0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	predictions := make([]float64, test.Rows*model.NOutputGroups())
+	err = model.PredictDense(test.Values, test.Rows, test.Cols, predictions, 0, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const tolerance = 1e-6
+	if err := util.AlmostEqualFloat64Slices(truePredictions.Values, predictions, tolerance); err != nil {
+		t.Errorf("v4 JSON gbdt: different predictions: %s", err.Error())
+	}
+}
+
+// TestLGLinearTreeTextRaw verifies linear tree raw predictions (no sigmoid)
+func TestLGLinearTreeTextRaw(t *testing.T) {
+	testPath := filepath.Join("testdata", "breast_cancer_linear_tree_test.tsv")
+	modelPath := filepath.Join("testdata", "lg_linear_tree_breast_cancer.model")
+	skipTestIfFileNotExist(t, testPath, modelPath)
+
+	test, err := mat.DenseMatFromCsvFile(testPath, 0, false, "\t", 0.0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	model, err := LGEnsembleFromFile(modelPath, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// test single prediction
+	pred := model.PredictSingle(test.Values[:test.Cols], 0)
+	if pred <= 0 {
+		t.Errorf("expected positive raw prediction for linear tree, got %f", pred)
+	}
+	t.Logf("linear tree raw prediction for first sample: %f", pred)
+
+	// test batch prediction
+	nSamples := 5
+	predictions := make([]float64, nSamples*model.NOutputGroups())
+	for i := 0; i < nSamples && i < test.Rows; i++ {
+		start := i * test.Cols
+		_ = model.Predict(test.Values[start:start+test.Cols], 0, predictions[i:i+1])
+	}
+	t.Logf("linear tree batch predictions (first %d): %v", nSamples, predictions[:nSamples])
+}

@@ -21,10 +21,11 @@ _leaves_ is a library implementing prediction code for GBRT (Gradient Boosting R
     * support getting leaf indices of decision trees
   * Support LightGBM ([repo](https://github.com/Microsoft/LightGBM)) models:
     * read models from `text` format and from `JSON` format
-    * support `gbdt`, `rf` (random forest) and `dart` models
+    * support `gbdt`, `rf` (random forest), `dart` and `linear_tree` models
     * support multiclass predictions
     * addition optimizations for categorical features (for example, _one hot_ decision rule)
     * addition optimizations exploiting only prediction usage
+    * compatible with LightGBM v2.x through v4.6.0 (text and JSON formats)
   * Support XGBoost ([repo](https://github.com/dmlc/xgboost)) models:
     * read models from binary format
     * support `gbtree`, `gblinear`, `dart` models

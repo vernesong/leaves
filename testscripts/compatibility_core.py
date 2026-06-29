@@ -71,17 +71,30 @@ class VirtualEnvBuilder:
         )
 
         if library_type == LibraryType.LIGHTGBM:
-            self.logger.info(f'Installing sklearn..')
-            execute_wrapper([env.pip_path, 'install', 'sklearn'])
+            self.logger.info(f'Installing scikit-learn..')
+            execute_wrapper([env.pip_path, 'install', 'scikit-learn'])
             lightgbm_package = f'lightgbm=={version}'
             self.logger.info(f'Installing {lightgbm_package}..')
             execute_wrapper([env.pip_path, 'install', lightgbm_package])
-        else:
-            self.logger.info(f'Installing sklearn..')
-            execute_wrapper([env.pip_path, 'install', 'sklearn'])
+        elif library_type == LibraryType.XGBOOST:
+            # old xgboost doesn't support Python 3.12+
+            py_ver = execute_wrapper([env.python_path, '-c',
+                'import sys; print(sys.version_info.minor)']).strip()
+            if int(py_ver) >= 12:
+                self.logger.warning(
+                    f'Skipping {library_type.name} {version}: '
+                    f'Python 3.{py_ver} incompatible with old xgboost')
+                return env
+            self.logger.info(f'Installing scikit-learn..')
+            execute_wrapper([env.pip_path, 'install', 'scikit-learn'])
+            self.logger.info(f'Installing numpy<2.0 for old xgboost compatibility..')
+            execute_wrapper([env.pip_path, 'install', 'numpy<2.0'])
             xgboost_package = f'xgboost=={version}'
             self.logger.info(f'Installing {xgboost_package}..')
             execute_wrapper([env.pip_path, 'install', xgboost_package])
+        else:
+            self.logger.info(f'Installing scikit-learn..')
+            execute_wrapper([env.pip_path, 'install', 'scikit-learn'])
 
         return env
 

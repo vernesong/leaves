@@ -19,20 +19,30 @@ type lgEnsembleJSON struct {
 	NumClasses           int               `json:"num_class"`
 	NumTreesPerIteration int               `json:"num_tree_per_iteration"`
 	MaxFeatureIdx        int               `json:"max_feature_idx"`
+	AverageOutput        bool              `json:"average_output"`
+	Objective            string            `json:"objective"`
+	LabelIndex           int               `json:"label_index"`
 	Trees                []json.RawMessage `json:"tree_info"`
-	// TODO: lightgbm should support the next fields
-	// AverageOutput bool   `json:"average_output"`
-	// Objective     string `json:"objective"`
 }
 
 type lgTreeJSON struct {
 	NumLeaves int    `json:"num_leaves"`
 	NumCat    uint32 `json:"num_cat"`
+	IsLinear  bool   `json:"is_linear"`
 	// Unused fields:
 	// TreeIndex uint32  `json:"tree_index"`
 	// Shrinkage float64 `json:"shrinkage"`
 	RootRaw json.RawMessage `json:"tree_structure"`
 	Root    interface{}
+}
+
+// lgLeafJSON represents a leaf node in a LightGBM JSON tree.
+// For linear trees, it also includes the linear model fields.
+type lgLeafJSON struct {
+	LeafValue    float64   `json:"leaf_value"`
+	LeafConst    float64   `json:"leaf_const"`
+	LeafFeatures []int     `json:"leaf_features"`
+	LeafCoeff    []float64 `json:"leaf_coeff"`
 }
 
 type lgNodeJSON struct {
@@ -119,7 +129,6 @@ func lgTreeFromReader(reader *bufio.Reader) (lgTree, error) {
 	if numLeaves < 1 {
 		return t, fmt.Errorf("num_leaves < 1")
 	}
-	numNodes := numLeaves - 1
 
 	leafValues, err := params.ToFloat64Slice("leaf_value")
 	if err != nil {
@@ -127,8 +136,65 @@ func lgTreeFromReader(reader *bufio.Reader) (lgTree, error) {
 	}
 	t.leafValues = leafValues
 
+	// check for linear tree (LightGBM v4+)
+	if params.Contains("is_linear") {
+		isLinear, err := params.ToInt("is_linear")
+		if err != nil {
+			return t, err
+		}
+		t.isLinear = isLinear == 1
+	}
+
+	// parse linear tree fields if present
+	if t.isLinear {
+		leafConsts, err := params.ToFloat64Slice("leaf_const")
+		if err != nil {
+			return t, err
+		}
+		t.leafConsts = leafConsts
+
+		numFeatures, err := params.ToIntSlice("num_features")
+		if err != nil {
+			return t, err
+		}
+		if len(numFeatures) != numLeaves {
+			return t, fmt.Errorf("num_features length (%d) != num_leaves (%d)", len(numFeatures), numLeaves)
+		}
+
+		t.leafFeatures = make([][]int, numLeaves)
+		t.leafCoeffs = make([][]float64, numLeaves)
+
+		// read flat leaf_features and leaf_coeff arrays
+		var allFeatures []int
+		var allCoeffs []float64
+		totalFeatureCount := 0
+		for _, nf := range numFeatures {
+			totalFeatureCount += nf
+		}
+		if totalFeatureCount > 0 {
+			allFeatures, err = params.ToIntSlice("leaf_features")
+			if err != nil {
+				return t, err
+			}
+			allCoeffs, err = params.ToFloat64Slice("leaf_coeff")
+			if err != nil {
+				return t, err
+			}
+		}
+
+		// distribute flat arrays to per-leaf slices
+		offset := 0
+		for i, nf := range numFeatures {
+			if nf > 0 {
+				t.leafFeatures[i] = allFeatures[offset : offset+nf]
+				t.leafCoeffs[i] = allCoeffs[offset : offset+nf]
+				offset += nf
+			}
+		}
+	}
+
 	if numLeaves == 1 {
-		// special case - constant value tree
+		// special case - constant value tree (linear trees with 1 leaf already handled above)
 		return t, nil
 	}
 
@@ -238,6 +304,7 @@ func lgTreeFromReader(reader *bufio.Reader) (lgTree, error) {
 		}
 		return createNumericalNode(idx)
 	}
+	numNodes := numLeaves - 1
 	origNodeIdxStack := make([]uint32, 0, numNodes)
 	convNodeIdxStack := make([]uint32, 0, numNodes)
 	visited := make([]bool, numNodes)
@@ -399,9 +466,9 @@ func LGEnsembleFromFile(filename string, loadTransformation bool) (*Ensemble, er
 	return LGEnsembleFromReader(bufReader, loadTransformation)
 }
 
-// unmarshalNode recuirsively unmarshal nodes data in the tree from JSON raw data. Tree's node can be:
-// 1. leaf node (contains field 'field_value')
-// 2. node with decision rule (contains field from `lgNodeJSON` structure)
+// unmarshalNode recursively unmarshal nodes data in the tree from JSON raw data. Tree's node can be:
+// 1. leaf node (returns *lgLeafJSON)
+// 2. inner node with decision rule (returns *lgNodeJSON)
 func unmarshalNode(raw []byte) (interface{}, error) {
 	node := &lgNodeJSON{}
 	err := json.Unmarshal(raw, node)
@@ -409,20 +476,17 @@ func unmarshalNode(raw []byte) (interface{}, error) {
 		return nil, err
 	}
 
-	// dirty way to check that we really load a lgNodeJSON struct from raw data
+	// check if this is a leaf node (no decision fields) or an inner node
 	if node.MissingType == "" {
-		// this is no tree node structure, then it should be map with "leaf_value" record
-		data := make(map[string]interface{})
-		err = json.Unmarshal(raw, &data)
+		// this is a leaf node - parse as lgLeafJSON
+		leaf := &lgLeafJSON{}
+		err = json.Unmarshal(raw, leaf)
 		if err != nil {
 			return nil, err
 		}
-		value, ok := data["leaf_value"].(float64)
-		if !ok {
-			return nil, fmt.Errorf("unknown tree")
-		}
-		return value, nil
+		return leaf, nil
 	}
+	// inner node with decision rule
 	node.LeftChild, err = unmarshalNode(node.LeftChildRaw)
 	if err != nil {
 		return nil, err
@@ -444,6 +508,7 @@ func unmarshalTree(raw []byte) (lgTree, error) {
 		return t, err
 	}
 
+	t.isLinear = treeJSON.IsLinear
 	t.nCategorical = treeJSON.NumCat
 	if t.nCategorical > 0 {
 		// first element set to zero for consistency
@@ -460,9 +525,28 @@ func unmarshalTree(raw []byte) (lgTree, error) {
 		return t, err
 	}
 
-	if value, ok := treeJSON.Root.(float64); ok {
-		// special case - constant value tree
-		t.leafValues = append(t.leafValues, value)
+	// Detect linear tree by checking for "leaf_const" in the raw JSON.
+	// LightGBM JSON ToJSON() does not output an explicit "is_linear" field,
+	// but linear trees always have "leaf_const" in leaf nodes.
+	if !t.isLinear && strings.Contains(string(raw), `"leaf_const"`) {
+		t.isLinear = true
+	}
+
+	// helper to add a leaf and return its index in leafValues
+	addLeaf := func(leaf *lgLeafJSON) uint32 {
+		idx := uint32(len(t.leafValues))
+		t.leafValues = append(t.leafValues, leaf.LeafValue)
+		if t.isLinear {
+			t.leafConsts = append(t.leafConsts, leaf.LeafConst)
+			t.leafFeatures = append(t.leafFeatures, leaf.LeafFeatures)
+			t.leafCoeffs = append(t.leafCoeffs, leaf.LeafCoeff)
+		}
+		return idx
+	}
+
+	if leaf, ok := treeJSON.Root.(*lgLeafJSON); ok {
+		// special case - constant value tree (1 leaf)
+		addLeaf(leaf)
 		return t, nil
 	}
 
@@ -481,15 +565,13 @@ func unmarshalTree(raw []byte) (lgTree, error) {
 			return node, fmt.Errorf("unexpected Threshold type %T", nodeJSON.Threshold)
 		}
 		node = numericalNode(nodeJSON.SplitFeature, missingType, threshold, defaultType)
-		if value, ok := nodeJSON.LeftChild.(float64); ok {
+		if leaf, ok := nodeJSON.LeftChild.(*lgLeafJSON); ok {
 			node.Flags |= leftLeaf
-			node.Left = uint32(len(t.leafValues))
-			t.leafValues = append(t.leafValues, value)
+			node.Left = addLeaf(leaf)
 		}
-		if value, ok := nodeJSON.RightChild.(float64); ok {
+		if leaf, ok := nodeJSON.RightChild.(*lgLeafJSON); ok {
 			node.Flags |= rightLeaf
-			node.Right = uint32(len(t.leafValues))
-			t.leafValues = append(t.leafValues, value)
+			node.Right = addLeaf(leaf)
 		}
 		return node, nil
 	}
@@ -542,15 +624,13 @@ func unmarshalTree(raw []byte) (lgTree, error) {
 		}
 
 		node = categoricalNode(nodeJSON.SplitFeature, missingType, catIdx, catType)
-		if value, ok := nodeJSON.LeftChild.(float64); ok {
+		if leaf, ok := nodeJSON.LeftChild.(*lgLeafJSON); ok {
 			node.Flags |= leftLeaf
-			node.Left = uint32(len(t.leafValues))
-			t.leafValues = append(t.leafValues, value)
+			node.Left = addLeaf(leaf)
 		}
-		if value, ok := nodeJSON.RightChild.(float64); ok {
+		if leaf, ok := nodeJSON.RightChild.(*lgLeafJSON); ok {
 			node.Flags |= rightLeaf
-			node.Right = uint32(len(t.leafValues))
-			t.leafValues = append(t.leafValues, value)
+			node.Right = addLeaf(leaf)
 		}
 		return node, nil
 	}
@@ -592,7 +672,8 @@ func unmarshalTree(raw []byte) (lgTree, error) {
 		if node.Flags&leftLeaf == 0 {
 			if left, ok := stackData.nodeJSON.LeftChild.(*lgNodeJSON); ok {
 				stack = append(stack, StackData{&t.nodes[len(t.nodes)-1].Left, left})
-			} else if _, ok := stackData.nodeJSON.LeftChild.(float64); ok {
+			} else if _, ok := stackData.nodeJSON.LeftChild.(*lgLeafJSON); ok {
+				// left child is a leaf, already handled in createNode
 			} else {
 				return t, fmt.Errorf("unexpected left child type %T", stackData.nodeJSON.LeftChild)
 			}
@@ -600,7 +681,8 @@ func unmarshalTree(raw []byte) (lgTree, error) {
 		if node.Flags&rightLeaf == 0 {
 			if right, ok := stackData.nodeJSON.RightChild.(*lgNodeJSON); ok {
 				stack = append(stack, StackData{&t.nodes[len(t.nodes)-1].Right, right})
-			} else if _, ok := stackData.nodeJSON.RightChild.(float64); ok {
+			} else if _, ok := stackData.nodeJSON.RightChild.(*lgLeafJSON); ok {
+				// right child is a leaf, already handled in createNode
 			} else {
 				return t, fmt.Errorf("unexpected right child type %T", stackData.nodeJSON.RightChild)
 			}
@@ -612,10 +694,6 @@ func unmarshalTree(raw []byte) (lgTree, error) {
 // LGEnsembleFromJSON reads LightGBM model from stream with JSON data
 func LGEnsembleFromJSON(reader io.Reader, loadTransformation bool) (*Ensemble, error) {
 	data := &lgEnsembleJSON{}
-
-	if loadTransformation {
-		return nil, fmt.Errorf("transformation functions are not supported for LightGBM models")
-	}
 
 	dec := json.NewDecoder(reader)
 
@@ -630,8 +708,9 @@ func LGEnsembleFromJSON(reader io.Reader, loadTransformation bool) (*Ensemble, e
 		return nil, fmt.Errorf("expected 'name' field = 'tree' (got: '%s')", data.Name)
 	}
 
-	if data.Version != "v2" {
-		return nil, fmt.Errorf("expected 'version' field = 'v2' (got: '%s')", data.Version)
+	// support JSON model versions v2, v3, v4 (LightGBM 3.x+ uses v3/v4)
+	if data.Version != "v2" && data.Version != "v3" && data.Version != "v4" {
+		return nil, fmt.Errorf("expected 'version' field = 'v2', 'v3', or 'v4' (got: '%s')", data.Version)
 	}
 
 	if data.NumClasses != data.NumTreesPerIteration {
@@ -648,6 +727,40 @@ func LGEnsembleFromJSON(reader io.Reader, loadTransformation bool) (*Ensemble, e
 	e.nRawOutputGroups = data.NumClasses
 	e.MaxFeatureIdx = data.MaxFeatureIdx
 
+	// handle random forest models
+	if data.AverageOutput {
+		e.name = "lightgbm.rf"
+		e.averageOutput = true
+	}
+
+	// determine transformation function from objective
+	var transform transformation.Transform
+	transform = &transformation.TransformRaw{e.nRawOutputGroups}
+	if loadTransformation && !e.averageOutput && data.Objective != "" {
+		objectiveStr := data.Objective
+
+		if objectiveStr == "poisson" || objectiveStr == "gamma" || objectiveStr == "tweedie" {
+			transform = &transformation.TransformExponential{}
+		} else if !strings.HasPrefix(objectiveStr, "regression") {
+			objectiveStruct, err := lgObjectiveParse(objectiveStr)
+			if err != nil {
+				// for unknown objective, use raw output
+				transform = &transformation.TransformRaw{e.nRawOutputGroups}
+			} else if objectiveStruct.name == "binary" && objectiveStruct.param == "sigmoid" {
+				if objectiveStruct.value != 1 {
+					return nil, fmt.Errorf("got sigmoid with value != 1 (got %d)", objectiveStruct.value)
+				}
+				transform = &transformation.TransformLogistic{}
+			} else if objectiveStruct.name == "multiclass" && objectiveStruct.param == "num_class" {
+				if objectiveStruct.value != e.nRawOutputGroups {
+					return nil, fmt.Errorf("got multiclass num_class != %d (got %d)", e.nRawOutputGroups, objectiveStruct.value)
+				}
+				transform = &transformation.TransformSoftmax{objectiveStruct.value}
+			}
+			// for other unknown objectives, raw output is used by default
+		}
+	}
+
 	nTrees := len(data.Trees)
 	if nTrees == 0 {
 		return nil, fmt.Errorf("no trees in file (based on tree_sizes value)")
@@ -663,5 +776,5 @@ func LGEnsembleFromJSON(reader io.Reader, loadTransformation bool) (*Ensemble, e
 		}
 		e.Trees = append(e.Trees, tree)
 	}
-	return &Ensemble{e, &transformation.TransformRaw{e.nRawOutputGroups}}, nil
+	return &Ensemble{e, transform}, nil
 }

@@ -4,6 +4,14 @@ from compatibility_core import Case, LibraryType
 
 
 LIGHTGBM_VERSIONS = [
+    '4.6.0',
+    '4.5.0',
+    '4.4.0',
+    '4.3.0',
+    '4.2.0',
+    '3.3.5',
+    '3.3.4',
+    '3.3.3',
     '2.3.0',
     '2.2.3',
     '2.2.2',
@@ -15,6 +23,16 @@ LIGHTGBM_VERSIONS = [
     '2.0.12',
     '2.0.11',
     '2.0.10',
+]
+
+# LightGBM v4.0+ versions that support linear_tree
+LIGHTGBM_V4_VERSIONS = [
+    '4.6.0',
+    '4.5.0',
+    '4.4.0',
+    '4.3.0',
+    '4.2.0',
+    '4.1.0',
 ]
 
 XGBOOST_VERSIONS = [
@@ -141,7 +159,7 @@ params = {
 
 clf = lgb.train(params, d_train, n_estimators)
 
-y_pred = clf.predict(X_test)
+y_pred = clf.predict(X_test, raw_score=True)
 
 model_filename = 'lg_rf_iris.model'
 pred_filename = 'lg_rf_iris_true_predictions.txt'
@@ -149,7 +167,7 @@ pred_filename = 'lg_rf_iris_true_predictions.txt'
 
 clf.save_model('$model_filename')
 np.savetxt('$true_predictions_filename', y_pred)
-datasets.dump_svmlight_file(X_test, y_test, '$data_filename')
+np.savetxt('$data_filename', X_test, delimiter='\\t')
 """)
 
     go_template = Template("""
@@ -161,7 +179,7 @@ import (
 )
 
 func main() {
-	test, err := mat.CSRMatFromLibsvmFile("$data_filename", 0, true)
+	test, err := mat.DenseMatFromCsvFile("$data_filename", 0, false, "\\t", 0.0)
 	if err != nil {
 		panic(err)
 	}
@@ -171,8 +189,8 @@ func main() {
 		panic(err)
 	}
 
-    predictions := mat.DenseMatZero(test.Rows(), model.NOutputGroups())
-	err = model.PredictCSR(test.RowHeaders, test.ColIndexes, test.Values, predictions.Values, 0, 1)
+    predictions := mat.DenseMatZero(test.Rows, model.NOutputGroups())
+	err = model.PredictDense(test.Values, test.Rows, test.Cols, predictions.Values, 0, 1)
     if err != nil {
         panic(err)
     }
@@ -251,8 +269,73 @@ func main() {
         )
 
 
+class LGLinearTreeBreastCancer(LGBaseCase):
+    """LightGBM v4.0+ linear tree test case."""
+    versions = LIGHTGBM_V4_VERSIONS
+
+    python_template = Template("""
+import lightgbm as lgb
+import numpy as np
+from sklearn import datasets
+from sklearn.model_selection import train_test_split
+
+X, y = datasets.load_breast_cancer(return_X_y=True)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
+
+n_estimators = 10
+d_train = lgb.Dataset(X_train, label=y_train)
+params = {
+    'boosting_type': 'gbdt',
+    'objective': 'binary',
+    'linear_tree': True,
+    'linear_lambda': 1.0,
+    'num_leaves': 8,
+    'min_data_in_leaf': 5,
+    'verbosity': -1,
+}
+clf = lgb.train(params, d_train, n_estimators)
+y_pred = clf.predict(X_test, raw_score=True)
+
+clf.save_model('$model_filename')
+np.savetxt('$true_predictions_filename', y_pred)
+np.savetxt('$data_filename', X_test, delimiter='\\t')
+""")
+
+    go_template = Template("""
+package main
+
+import (
+    "github.com/vernesong/leaves"
+    "github.com/vernesong/leaves/mat"
+)
+
+func main() {
+    test, err := mat.DenseMatFromCsvFile("$data_filename", 0, false, "\\t", 0.0)
+    if err != nil {
+        panic(err)
+    }
+
+    model, err := leaves.LGEnsembleFromFile("$model_filename", false)
+    if err != nil {
+        panic(err)
+    }
+    predictions := mat.DenseMatZero(test.Rows, model.NOutputGroups())
+    err = model.PredictDense(test.Values, test.Rows, test.Cols, predictions.Values, 0, 1)
+    if err != nil {
+        panic(err)
+    }
+
+    err = predictions.ToCsvFile("$predictions_filename", "\\t")
+    if err != nil {
+        panic(err)
+    }
+}
+""")
+
+
 cases = [
     LGBreastCancer,
     LGIrisRandomForest,
+    LGLinearTreeBreastCancer,
     XGIrisMulticlass,
 ]

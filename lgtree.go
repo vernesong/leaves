@@ -33,6 +33,11 @@ type lgTree struct {
 	catBoundaries []uint32
 	catThresholds []uint32
 	nCategorical  uint32
+	// linear tree fields (LightGBM v4+ with linear_tree=true)
+	isLinear     bool
+	leafConsts   []float64   // constant term per leaf
+	leafFeatures [][]int     // feature indices per leaf
+	leafCoeffs   [][]float64 // coefficients per leaf
 }
 
 func (t *lgTree) numericalDecision(node *lgNode, fval float64) bool {
@@ -73,6 +78,9 @@ func (t *lgTree) decision(node *lgNode, fval float64) bool {
 
 func (t *lgTree) predict(fvals []float64) (float64, uint32) {
 	if len(t.nodes) == 0 {
+		if t.isLinear {
+			return t.linearLeafValue(0, fvals), 0
+		}
 		return t.leafValues[0], 0
 	}
 	idx := uint32(0)
@@ -81,16 +89,41 @@ func (t *lgTree) predict(fvals []float64) (float64, uint32) {
 		left := t.decision(node, fvals[node.Feature])
 		if left {
 			if node.Flags&leftLeaf > 0 {
+				if t.isLinear {
+					return t.linearLeafValue(node.Left, fvals), node.Left
+				}
 				return t.leafValues[node.Left], node.Left
 			}
 			idx = node.Left
 		} else {
 			if node.Flags&rightLeaf > 0 {
+				if t.isLinear {
+					return t.linearLeafValue(node.Right, fvals), node.Right
+				}
 				return t.leafValues[node.Right], node.Right
 			}
 			idx++
 		}
 	}
+}
+
+// linearLeafValue computes linear model prediction at a leaf:
+//
+//	leaf_const[leaf] + Σ leaf_coeff[leaf][i] * fvals[leaf_features[leaf][i]]
+//
+// If any feature value is NaN, falls back to leafValues[leaf] (matching LightGBM behavior).
+func (t *lgTree) linearLeafValue(leaf uint32, fvals []float64) float64 {
+	features := t.leafFeatures[leaf]
+	coeffs := t.leafCoeffs[leaf]
+	val := t.leafConsts[leaf]
+	for i, feat := range features {
+		fval := fvals[feat]
+		if math.IsNaN(fval) {
+			return t.leafValues[leaf]
+		}
+		val += coeffs[i] * fval
+	}
+	return val
 }
 
 func (t *lgTree) findInBitset(idx uint32, pos uint32) bool {

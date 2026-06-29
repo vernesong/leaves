@@ -75,6 +75,26 @@ func (p *stringParams) ToInt(key string) (int, error) {
 	return value, nil
 }
 
+func (p *stringParams) ToIntSlice(key string) ([]int, error) {
+	valueStr, isFound := (*p)[key]
+	if !isFound {
+		return nil, fmt.Errorf("no %s field", key)
+	}
+	valuesStr := strings.Split(valueStr, " ")
+	values := make([]int, 0, len(valuesStr))
+	for _, vStr := range valuesStr {
+		if vStr == "" {
+			continue
+		}
+		value, err := strconv.Atoi(vStr)
+		if err != nil {
+			return nil, fmt.Errorf("can't convert %s: %s", key, err.Error())
+		}
+		values = append(values, value)
+	}
+	return values, nil
+}
+
 func (p *stringParams) ToString(key string) (string, error) {
 	valueStr, isFound := (*p)[key]
 	if !isFound {
@@ -125,6 +145,9 @@ func (p *stringParams) ToFloat64Slice(key string) ([]float64, error) {
 	valuesStr := strings.Split(valueStr, " ")
 	values := make([]float64, 0, len(valuesStr))
 	for _, vStr := range valuesStr {
+		if vStr == "" {
+			continue
+		}
 		value, err := strconv.ParseFloat(vStr, 64)
 		if err != nil {
 			return nil, fmt.Errorf("can't convert %s: %s", key, err.Error())
@@ -142,6 +165,9 @@ func (p *stringParams) ToUint32Slice(key string) ([]uint32, error) {
 	valuesStr := strings.Split(valueStr, " ")
 	values := make([]uint32, 0, len(valuesStr))
 	for _, vStr := range valuesStr {
+		if vStr == "" {
+			continue
+		}
 		value, err := strconv.ParseUint(vStr, 10, 32)
 		if err != nil {
 			return nil, fmt.Errorf("can't convert %s: %s", key, err.Error())
@@ -159,6 +185,9 @@ func (p *stringParams) ToInt32Slice(key string) ([]int32, error) {
 	valuesStr := strings.Split(valueStr, " ")
 	values := make([]int32, 0, len(valuesStr))
 	for _, vStr := range valuesStr {
+		if vStr == "" {
+			continue
+		}
 		value, err := strconv.ParseInt(vStr, 10, 32)
 		if err != nil {
 			return nil, fmt.Errorf("can't convert %s: %s", key, err.Error())
