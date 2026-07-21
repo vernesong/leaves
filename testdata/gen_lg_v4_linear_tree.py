@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Generate LightGBM v4.6.0 test models for leaves — linear tree + JSON v4 support.
+"""Generate LightGBM v4.7.0 test models for leaves — linear tree + JSON v4 support.
 
-Requires: lightgbm >= 4.6.0
+Requires: lightgbm >= 4.7.0
 
 Output files:
   - lg_linear_tree_breast_cancer.model      text format (linear_tree)
